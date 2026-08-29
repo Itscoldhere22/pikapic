@@ -39,8 +39,7 @@ GENERATOR_DIRS = {
     "BigGAN": "biggan",
     "GLIDE": "glide",
     "Midjourney": "midjourney",
-    "Stable Diffusion v1.4": "sdv14",
-    "Stable Diffusion v1.5": "sdv15",
+    "Stable Diffusion v1.5": "sdv5",
     "VQDM": "vqdm",
     "Wukong": "wukong",
 }

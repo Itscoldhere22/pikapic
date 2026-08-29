@@ -162,10 +162,7 @@ those flags for the real run.
 ## 6. Step 3 — Evaluate
 
 ```bash
-uv run python src/evaluate.py \
-  --manifest data/image_manifest.csv \
-  --checkpoint checkpoints/best.pt \
-  --split val
+uv run python src/evaluate.py --manifest data/image_manifest.csv --checkpoint checkpoints/best.pt --split val
 ```
 
 This prints:
