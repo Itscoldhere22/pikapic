@@ -59,7 +59,7 @@ def parse_args():
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--patience", type=int, default=3, help="Early-stopping patience (epochs).")
+    parser.add_argument("--patience", type=int, default=30, help="Early-stopping patience (epochs).")
     parser.add_argument("--eval-variants", default=",".join(SELECTION_VARIANTS),
                         help="Comma-separated variants for the selection score.")
     parser.add_argument("--no-amp", action="store_true", help="Disable mixed precision.")

@@ -182,6 +182,9 @@ uv run python src/evaluate.py \
   --checkpoint checkpoints/best.pt \
   --split test
 ```
+```windows
+uv run python src/evaluate.py --manifest data/image_manifest.csv --checkpoint checkpoints/best.pt --split test
+```
 
 To save the per-variant table to a CSV for your report:
 
