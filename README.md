@@ -182,9 +182,6 @@ uv run python src/evaluate.py \
   --checkpoint checkpoints/best.pt \
   --split test
 ```
-```windows
-uv run python src/evaluate.py --manifest data/image_manifest.csv --checkpoint checkpoints/best.pt --split test
-```
 
 To save the per-variant table to a CSV for your report:
 
@@ -224,13 +221,16 @@ uv run python src/evaluate.py \
 | `--lr` | `1e-4` | Learning rate for the backbone (stage 2). |
 | `--head-lr` | `1e-3` | Learning rate for the classifier head. |
 | `--weight-decay` | `1e-4` | AdamW weight decay. |
+| `--aug-strength` | `1.0` | Scales the train augmentation probability (`1.0` = default; `<1` lighter, `>1` heavier). |
+| `--pos-weight` | *(off)* | Positive-class weight for `BCEWithLogitsLoss` (use if your classes are imbalanced). |
 | `--workers` | `4` | DataLoader worker processes. |
 | `--device` | `cuda` (or `cpu`) | `cuda`, `cpu`, or a specific device like `cuda:0`. |
 | `--seed` | `42` | Random seed. |
-| `--patience` | `3` | Early-stopping patience (epochs). |
+| `--patience` | `30` | Early-stopping patience (epochs). |
 | `--eval-variants` | see below | Comma-separated variants used for the selection score. |
 | `--no-amp` | off | Disable mixed precision. |
 | `--no-pretrained` | off | Train from scratch (skips the weight download; for offline/testing). |
+| `--resume` | *(none)* | Path to a checkpoint to resume from (skips the head-only stage). |
 | `--sanity` | off | Tiny run to smoke-test the pipeline. |
 
 ### `src/evaluate.py` — evaluate a checkpoint
@@ -336,3 +336,69 @@ forensic signal in every image.
 This is **Phase 1** (reliable baseline). Later phases: hyperparameter variants
 (Phase 2), multi-crop inference (Phase 3), and greedy weight-space model soup
 (Phase 4) — see `PLAN.md` for details.
+
+---
+
+## 13. Phase 2 — hyperparameter variants
+
+Phase 2 (from `PLAN.md`) is a small sweep over the Phase 1 baseline: run 3–5
+variants, record every configuration, and keep their checkpoints separate so the
+Phase 4 greedy soup can average the best ones. **You don't need new scripts** —
+every axis is already a CLI flag. The two that were missing are `--aug-strength`
+and `--pos-weight` (added to `src/train.py` and `src/dataset.py`).
+
+Here is every Phase 2 knob and where it lives:
+
+| Axis | Flag | Default | Where it's defined |
+|---|---|---|---|
+| Backbone learning rate | `--lr` | `1e-4` | `parse_args()` in `src/train.py` |
+| Head learning rate | `--head-lr` | `1e-3` | `parse_args()` in `src/train.py` |
+| Weight decay | `--weight-decay` | `1e-4` | `parse_args()` in `src/train.py` |
+| Random seed | `--seed` | `42` | `parse_args()` in `src/train.py` |
+| **Augmentation strength** | `--aug-strength` | `1.0` | `build_train_transform()` in `src/dataset.py` (scales `p = 0.5 * aug_strength`) |
+| **Class weighting** | `--pos-weight` | *(off)* | `BCEWithLogitsLoss` in `src/train.py` |
+
+**One rule:** give every variant its **own `--out-dir`**, otherwise each run
+overwrites the previous run's `checkpoints/best.pt`.
+
+The "Medium" / "Strong" augmentation labels map to a concrete `--aug-strength`
+value. Each distortion gate fires with probability `p = 0.5 × aug_strength`, and
+the share of images left **clean** is `(1 − p)²`:
+
+| Label | `--aug-strength` | gate p | clean | one | two |
+|---|---|---|---|---|---|
+| Medium | `1.0` | 0.50 | 25% | 50% | 25% |
+| Strong | `1.5` | 0.75 | ~6% | ~38% | ~56% |
+
+(`Strong` is aggressive — ~6% clean is below PLAN's "keep 20–30% clean" guidance.
+Use `--aug-strength 1.2` ≈ 16% clean if you want to stay inside that window.)
+
+A concrete 3-variant sweep (run one at a time):
+
+```bash
+# 1. Conservative fine-tuning
+uv run python src/train.py --manifest data/image_manifest.csv --out-dir checkpoints/v1_conservative \
+  --head-lr 5e-4 --lr 5e-5 --weight-decay 1e-4 --aug-strength 1.0 --seed 42
+
+# 2. Stronger adaptation
+uv run python src/train.py --manifest data/image_manifest.csv --out-dir checkpoints/v2_stronger \
+  --head-lr 1e-3 --lr 2e-4 --weight-decay 1e-4 --aug-strength 1.0 --seed 42
+
+# 3. Regularized / imbalance-robust
+uv run python src/train.py --manifest data/image_manifest.csv --out-dir checkpoints/v3_regularized \
+  --head-lr 1e-3 --lr 1e-4 --weight-decay 5e-4 --aug-strength 1.5 --seed 42
+```
+
+> On class weighting: the dataset is balanced (10k AI + 10k real), so
+> `--pos-weight` has nothing to fix. Only add it (e.g. `--pos-weight 1.5`) if you
+> deliberately imbalance the real/AI counts.
+
+After each run, evaluate its `best.pt`:
+
+```bash
+uv run python src/evaluate.py --manifest data/image_manifest.csv --checkpoint checkpoints/v1_conservative/best.pt --split val
+```
+
+Each run's checkpoint stores its full config (now including `aug_strength` and
+`pos_weight`), and the final `Best score=` line prints the selection score. Keep
+both so you can rank the variants and feed the winners into the Phase 4 soup.

@@ -56,6 +56,10 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=1e-4, help="Backbone LR (stage 2).")
     parser.add_argument("--head-lr", type=float, default=1e-3, help="Classifier-head LR.")
     parser.add_argument("--weight-decay", type=float, default=1e-4)
+    parser.add_argument("--aug-strength", type=float, default=1.0,
+                        help="Scale the train augmentation probability (1.0=default; <1 lighter, >1 heavier).")
+    parser.add_argument("--pos-weight", type=float, default=None,
+                        help="Optional positive-class weight for BCEWithLogitsLoss (class imbalance).")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--seed", type=int, default=42)
@@ -126,7 +130,10 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     train_ds = AIGCDataset(
-        args.manifest, split="train", max_per_class=args.max_per_class
+        args.manifest,
+        split="train",
+        max_per_class=args.max_per_class,
+        aug_strength=args.aug_strength,
     )
     val_ds = AIGCDataset(args.manifest, split="val")
 
@@ -151,7 +158,12 @@ def main() -> None:
         resume_best = state.get("selection_score", -math.inf)
         print(f"Resumed weights from {args.resume}; skipping the head-only stage.")
 
-    criterion = nn.BCEWithLogitsLoss()
+    if args.pos_weight is not None:
+        criterion = nn.BCEWithLogitsLoss(
+            pos_weight=torch.tensor([args.pos_weight], device=device)
+        )
+    else:
+        criterion = nn.BCEWithLogitsLoss()
 
     variant_names = [v.strip() for v in args.eval_variants.split(",") if v.strip()]
 
@@ -233,6 +245,8 @@ def main() -> None:
                 "lr": args.lr,
                 "head_lr": args.head_lr,
                 "weight_decay": args.weight_decay,
+                "aug_strength": args.aug_strength,
+                "pos_weight": args.pos_weight,
                 "seed": args.seed,
             },
         }

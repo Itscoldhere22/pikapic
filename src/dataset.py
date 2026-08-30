@@ -397,13 +397,18 @@ def _to_model(size: int) -> list:
     ]
 
 
-def build_train_transform(size: int = 224) -> T.Compose:
+def build_train_transform(size: int = 224, aug_strength: float = 1.0) -> T.Compose:
     """Probabilistic robustness augmentation for training.
 
-    Two independent ``RandomApply`` gates (p=0.5 each) yield ~25% clean images,
-    ~50% with one distortion, and ~25% with two — per PLAN.md, avoiding uniform
-    max-strength distortion that would erase forensic signals.
+    Two independent ``RandomApply`` gates yield ~25% clean images, ~50% with one
+    distortion, and ~25% with two at ``aug_strength=1.0`` — per PLAN.md, avoiding
+    uniform max-strength distortion that would erase forensic signals.
+
+    ``aug_strength`` scales the per-gate probability ``p = 0.5 * aug_strength``
+    (clamped to [0, 1]): ``1.0`` = default, ``<1`` = lighter augmentation (more
+    clean images), ``>1`` = heavier (fewer clean, more double distortions).
     """
+    p = min(1.0, max(0.0, 0.5 * aug_strength))
     return T.Compose(
         [
             T.RandomHorizontalFlip(p=0.5),
@@ -417,8 +422,8 @@ def build_train_transform(size: int = 224) -> T.Compose:
                 ],
                 p=0.3,
             ),
-            T.RandomApply([_distortion_pool()], p=0.5),
-            T.RandomApply([_distortion_pool()], p=0.5),
+            T.RandomApply([_distortion_pool()], p=p),
+            T.RandomApply([_distortion_pool()], p=p),
         ]
         + _to_model(size)
     )
@@ -503,6 +508,8 @@ class AIGCDataset(Dataset):
             ``split`` (train -> augmentation, otherwise clean).
         max_per_class: Optional cap on examples per class (e.g. 10000 -> 10k AI
             + 10k real), applied after the split filter.
+        aug_strength: Scales the train augmentation probability (1.0 = default,
+            <1 lighter / more clean, >1 heavier). Ignored if ``transform`` is set.
     """
 
     def __init__(
@@ -511,6 +518,7 @@ class AIGCDataset(Dataset):
         split: str | None = "train",
         transform=None,
         max_per_class: int | None = None,
+        aug_strength: float = 1.0,
     ):
         df = load_manifest(manifest)
         if split is not None and "split" in df.columns:
@@ -518,11 +526,11 @@ class AIGCDataset(Dataset):
         if max_per_class is not None:
             df = cap_per_class(df, max_per_class, seed=SEED)
         self.df = df.reset_index(drop=True)
-        self.transform = transform if transform is not None else self._default_transform(split)
+        self.transform = transform if transform is not None else self._default_transform(split, aug_strength)
 
     @staticmethod
-    def _default_transform(split):
-        return build_train_transform() if split == "train" else build_eval_transform()
+    def _default_transform(split, aug_strength=1.0):
+        return build_train_transform(aug_strength=aug_strength) if split == "train" else build_eval_transform()
 
     def __len__(self) -> int:
         return len(self.df)
