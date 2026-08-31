@@ -17,8 +17,10 @@ then evaluates it **per transformation** and on **unseen generators**.
 | `src/dataset.py` | Builds the dataset manifest (list of images) **and** loads/augments images during training & evaluation. |
 | `src/train.py` | Trains the ResNet-50 model and saves checkpoints. |
 | `src/evaluate.py` | Loads a checkpoint and reports metrics, broken down by transformation. |
+| `src/inference.py` | Runs batch inference on an image directory and outputs predictions to JSON. |
+| `src/app.py` | Streamlit web dashboard for interactive inference and transformation testing. |
 
-There are three steps: **build the manifest → train → evaluate**. Each is one command.
+There are three main steps: **build the manifest → train → evaluate**. Optional: use **inference** for batch predictions or **app** for interactive exploration.
 
 ---
 
@@ -214,7 +216,81 @@ uv run python src/evaluate.py \
 
 ---
 
-## 7. CLI reference
+## 7. Step 4 — Batch inference (optional)
+
+To run predictions on a directory of images and save results to JSON:
+
+```bash
+uv run python src/inference.py \
+  --checkpoint checkpoints/best.pt \
+  --image-dir /path/to/images \
+  --output predictions.json
+```
+
+This processes all images in the directory (JPG, PNG, BMP, WebP, GIF, TIFF) and
+writes a JSON file with predictions:
+
+```json
+[
+  {"image_path": "image1.jpg", "pred": 0.92},
+  {"image_path": "image2.jpg", "pred": 0.15},
+  {"image_path": "image3.png", "pred": 0.78}
+]
+```
+
+Where:
+- **`pred ≈ 1.0`** → high confidence the image is **AI-generated**
+- **`pred ≈ 0.0`** → high confidence the image is **real**
+
+**Options:**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--checkpoint` | *(required)* | Path to a trained checkpoint (e.g. `checkpoints/best.pt`). |
+| `--image-dir` | *(required)* | Directory containing images to classify. |
+| `--output` | *(required)* | Path to save the results JSON file. |
+| `--device` | `cuda` (or `cpu`) | `cuda` or `cpu`. |
+| `--batch-size` | `16` | Batch size for inference (higher = faster but more memory). |
+
+**Example with custom options:**
+
+```bash
+uv run python src/inference.py \
+  --checkpoint checkpoints/best.pt \
+  --image-dir ~/my_images \
+  --output results/predictions.json \
+  --device cuda \
+  --batch-size 32
+```
+
+---
+
+## 8. Interactive dashboard (optional)
+
+For interactive exploration, run the Streamlit app to upload images, apply real-world transformations live, and watch predictions:
+
+```bash
+uv run streamlit run src/app.py -- --checkpoint checkpoints/best.pt
+```
+
+This opens a web interface where you can:
+
+- **Upload an image** — JPG, PNG, BMP, WebP, GIF, or TIFF
+- **Apply transformations interactively** — JPEG compression, blur, resize, noise, color jitter, cropping
+- **Watch live predictions** — see how confidence changes as you increase transformation severity
+- **View degradation curves** — see how the model performs across all transformation types at once
+
+**Example:**
+
+```bash
+uv run streamlit run src/app.py -- --checkpoint checkpoints/best.pt --device cuda
+```
+
+The app assumes `label 1 = AI-generated, label 0 = real`. If your dataset uses the opposite convention, edit `AI_LABEL` in `src/app.py`.
+
+---
+
+## 9. CLI reference
 
 ### `src/dataset.py` — build the manifest
 
@@ -267,9 +343,41 @@ uv run python src/evaluate.py \
 | `--output` | *(none)* | Optional CSV path to write the per-variant table. |
 | `--seed` | `0` | Random seed. |
 
+### `src/inference.py` — batch inference on image directories
+
+| Flag | Default | Description |
+|---|---|---|
+| `--checkpoint` | *(required)* | Path to a trained checkpoint (e.g. `checkpoints/best.pt`). |
+| `--image-dir` | *(required)* | Directory containing images to classify. |
+| `--output` | *(required)* | Path to save the results JSON file. |
+| `--device` | `cuda` (or `cpu`) | `cuda` or `cpu`. |
+| `--batch-size` | `16` | Batch size for inference (higher = faster but more memory). |
+
+### `src/app.py` — interactive dashboard (Streamlit)
+
+Run with:
+```bash
+streamlit run src/app.py -- [options]
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--checkpoint` | `checkpoints/best.pt` | Path to a trained checkpoint. |
+| `--device` | `cuda` (or `cpu`) | `cuda` or `cpu`. |
+
+The app provides sliders to interactively apply and control:
+- JPEG compression (quality 100, 90, 70, 50, 30)
+- Gaussian blur (σ 0.0, 0.5, 1.0, 2.0)
+- Resize/downsample (scales 1.0, 0.5, 0.25)
+- Gaussian noise (σ 0.0, 0.02, 0.05, 0.10)
+- Brightness, contrast, saturation (±20%)
+- Center cropping (100% or 80%)
+
+It also runs a full degradation sweep showing how prediction confidence changes across all transformations.
+
 ---
 
-## 8. Robustness variants
+## 10. Robustness variants
 
 `--variants` (evaluate) and `--eval-variants` (train) accept these names,
 comma-separated with no spaces, e.g. `--variants jpeg_70,blur_1.0,crop_0.8`.
@@ -309,7 +417,7 @@ comma-separated with no spaces, e.g. `--variants jpeg_70,blur_1.0,crop_0.8`.
 
 ---
 
-## 9. How the "best" checkpoint is chosen
+## 11. How the "best" checkpoint is chosen
 
 After each epoch the model is scored as:
 
@@ -325,7 +433,7 @@ resize_0.5, noise_0.05, color_jitter, crop_0.8`) to keep training fast; change i
 
 ---
 
-## 10. Training augmentations (why it's robust)
+## 12. Training augmentations (why it's robust)
 
 During training, ~25% of images are kept **clean**; the rest get **one or two**
 random distortions drawn from a pool (JPEG, blur, downscale, color jitter, sharpness,
@@ -335,7 +443,7 @@ forensic signal in every image.
 
 ---
 
-## 11. Troubleshooting
+## 13. Troubleshooting
 
 - **`ModuleNotFoundError: No module named 'dataset'`** — run the scripts as
   `python src/train.py …` (from the project root), **not** `python -m src.train`.
@@ -350,7 +458,7 @@ forensic signal in every image.
 
 ---
 
-## 12. Roadmap (from `PLAN.md`)
+## 14. Roadmap (from `PLAN.md`)
 
 This is **Phase 1** (reliable baseline). Later phases: hyperparameter variants
 (Phase 2), multi-crop inference (Phase 3), and greedy weight-space model soup
@@ -358,7 +466,7 @@ This is **Phase 1** (reliable baseline). Later phases: hyperparameter variants
 
 ---
 
-## 13. Phase 2 — hyperparameter variants
+## 15. Phase 2 — hyperparameter variants
 
 Phase 2 (from `PLAN.md`) is a small sweep over the Phase 1 baseline: run 3–5
 variants, record every configuration, and keep their checkpoints separate so the
@@ -422,7 +530,7 @@ Each run's checkpoint stores its full config (now including `aug_strength` and
 `pos_weight`), and the final `Best score=` line prints the selection score. Keep
 both so you can rank the variants and feed the winners into the Phase 4 soup.
 
-## 14. Phase 3 - Model Soup
+## 16. Phase 3 - Model Soup
 ### Trained without Midjourney and Wukong
 ```powershell
 uv run python .\src\soup.py .\checkpoints\v0_default_50\best.pt .\checkpoints\v1_conservative_50\best.pt .\checkpoints\v2_stronger_50\v2_stronger_50.pt .\checkpoints\v3_regularized_50\v3_regularized.pt --manifest .\data\image_manifest.csv
