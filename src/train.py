@@ -83,7 +83,7 @@ def parse_args():
                         help="Scale the train augmentation probability (1.0=default; <1 lighter, >1 heavier).")
     parser.add_argument("--pos-weight", type=float, default=None,
                         help="Optional positive-class weight for BCEWithLogitsLoss (class imbalance).")
-    parser.add_argument("--workers", type=int, default=11)
+    parser.add_argument("--workers", type=int, default=16)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--patience", type=int, default=30, help="Early-stopping patience (epochs).")
