@@ -45,11 +45,34 @@ def format_duration(seconds: float) -> str:
     return f"{s}s"
 
 
+def get_rng_state() -> dict:
+    """Capture the RNG states so a resumed run continues deterministically."""
+    state = {
+        "torch": torch.get_rng_state(),
+        "numpy": np.random.get_state(),
+        "random": random.getstate(),
+    }
+    if torch.cuda.is_available():
+        state["cuda"] = torch.cuda.get_rng_state_all()
+    return state
+
+
+def set_rng_state(state: dict) -> None:
+    if "torch" in state:
+        torch.set_rng_state(state["torch"])
+    if "numpy" in state:
+        np.random.set_state(state["numpy"])
+    if "random" in state:
+        random.setstate(state["random"])
+    if "cuda" in state and state["cuda"] is not None and torch.cuda.is_available():
+        torch.cuda.set_rng_state_all(state["cuda"])
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Train the AIGC detector (Phase 1).")
     parser.add_argument("--manifest", required=True, help="Manifest CSV with path/label/split.")
     parser.add_argument("--out-dir", default="checkpoints", help="Directory for checkpoints.")
-    parser.add_argument("--epochs", type=int, default=8, help="Fine-tuning epochs (stage 2).")
+    parser.add_argument("--epochs", type=int, default=50, help="Fine-tuning epochs (stage 2).")
     parser.add_argument("--head-epochs", type=int, default=2, help="Head-only epochs (stage 1).")
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--max-per-class", type=int, default=10_000, help="Cap examples/class (10k AI + 10k real).")
@@ -60,7 +83,7 @@ def parse_args():
                         help="Scale the train augmentation probability (1.0=default; <1 lighter, >1 heavier).")
     parser.add_argument("--pos-weight", type=float, default=None,
                         help="Optional positive-class weight for BCEWithLogitsLoss (class imbalance).")
-    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--workers", type=int, default=11)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--patience", type=int, default=30, help="Early-stopping patience (epochs).")
@@ -108,8 +131,22 @@ def train_one_epoch(model, loader, optimizer, criterion, device, scaler, use_amp
     return total_loss / max(1, n)
 
 
-def save_checkpoint(model, path, **meta):
-    torch.save({"model": model.state_dict(), **meta}, path)
+def save_checkpoint(model, path, optimizer=None, scaler=None, rng=None, **meta):
+    """Save model weights plus (optionally) full resume state.
+
+    ``optimizer`` / ``scaler`` / ``rng`` are only written when supplied, so
+    head-stage snapshots stay small while stage-2 checkpoints carry everything
+    needed for a true resume.
+    """
+    state = {"model": model.state_dict()}
+    if optimizer is not None:
+        state["optimizer"] = optimizer.state_dict()
+    if scaler is not None:
+        state["scaler"] = scaler.state_dict()
+    if rng is not None:
+        state["rng"] = rng
+    state.update(meta)
+    torch.save(state, path)
 
 
 def main() -> None:
@@ -148,15 +185,34 @@ def main() -> None:
     print(f"Train examples: {len(train_ds)}, Val examples: {len(val_ds)}")
 
     resume = args.resume is not None
+    resume_epoch = 0
     resume_best = -math.inf
+    resume_best_epoch = -1
+    resume_stale = 0
+    resume_state = None
     model = build_model(
         num_classes=1, pretrained=(not args.no_pretrained) and not resume
     ).to(device)
     if resume:
-        state = torch.load(args.resume, map_location=device)
-        model.load_state_dict(state["model"])
-        resume_best = state.get("selection_score", -math.inf)
-        print(f"Resumed weights from {args.resume}; skipping the head-only stage.")
+        # weights_only=False: the checkpoint embeds numpy RNG state (self-produced,
+        # trusted), which the default safe unpickler rejects.
+        resume_state = torch.load(args.resume, map_location=device, weights_only=False)
+        model.load_state_dict(resume_state["model"])
+        resume_best = resume_state.get(
+            "best_score", resume_state.get("selection_score", -math.inf)
+        )
+        resume_epoch = resume_state.get("epoch", 0)
+        if resume_state.get("stage") == "head":
+            # Head-stage snapshots precede fine-tuning entirely, so resume fine-tuning
+            # from scratch (their "epoch" counts head epochs, not fine-tuning epochs).
+            resume_epoch = 0
+        resume_best_epoch = resume_state.get("best_epoch", -1)
+        resume_stale = resume_state.get("stale", 0)
+        set_rng_state(resume_state.get("rng", {}))
+        print(
+            f"Resumed from {args.resume} (epoch {resume_epoch}); "
+            f"skipping the head-only stage."
+        )
 
     if args.pos_weight is not None:
         criterion = nn.BCEWithLogitsLoss(
@@ -187,23 +243,49 @@ def main() -> None:
                 f"({format_duration(head_durations[-1])})  ETA ~{format_duration(eta)}"
             )
             save_checkpoint(
-                model, out_dir / f"head_epoch_{epoch}.pt", stage="head", epoch=epoch, loss=loss
+                model,
+                out_dir / f"head_epoch_{epoch}.pt",
+                rng=get_rng_state(),
+                stage="head",
+                epoch=epoch,
+                loss=loss,
             )
 
         # Snapshot of the finished head-stage model, before unfreezing the backbone.
-        save_checkpoint(model, out_dir / "head.pt", stage="head", epoch=args.head_epochs, loss=loss)
+        save_checkpoint(
+            model,
+            out_dir / "head.pt",
+            rng=get_rng_state(),
+            stage="head",
+            epoch=args.head_epochs,
+            loss=loss,
+        )
 
     # --- Stage 2: fine-tune the full network ---
     for p in model.parameters():
         p.requires_grad = True
     optimizer = build_optimizer(model, args, stage="full")
+    if resume_state is not None:
+        if "optimizer" in resume_state:
+            optimizer.load_state_dict(resume_state["optimizer"])
+            if "scaler" in resume_state and use_amp:
+                scaler.load_state_dict(resume_state["scaler"])
+            print("  (restored optimizer + scaler state — true resume)")
+        else:
+            print("  (no optimizer state in checkpoint — resuming weights only, warm start)")
 
     best_score = resume_best
-    best_epoch = -1
-    stale = 0
+    best_epoch = resume_best_epoch
+    stale = resume_stale
+    start_epoch = resume_epoch + 1
     print(f"Stage 2: full fine-tuning for {args.epochs} epoch(s).")
+    if start_epoch > args.epochs:
+        print(
+            f"Checkpoint already at epoch {resume_epoch} (>= target {args.epochs}); "
+            f"nothing to train."
+        )
     epoch_durations = []
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(start_epoch, args.epochs + 1):
         t0 = time.perf_counter()
         loss = train_one_epoch(model, train_loader, optimizer, criterion, device, scaler, use_amp)
         t_train = time.perf_counter() - t0
@@ -235,9 +317,23 @@ def main() -> None:
             f"ETA ~{format_duration(eta)}"
         )
 
+        # Update best/early-stopping state *before* saving so checkpoints carry it.
+        if score > best_score:
+            best_score = score
+            best_epoch = epoch
+            stale = 0
+            is_best = True
+        else:
+            stale += 1
+            is_best = False
+
         meta = {
+            "stage": "full",
             "epoch": epoch,
             "selection_score": score,
+            "best_score": best_score,
+            "best_epoch": best_epoch,
+            "stale": stale,
             "threshold": threshold,
             "config": {
                 "max_per_class": args.max_per_class,
@@ -250,18 +346,27 @@ def main() -> None:
                 "seed": args.seed,
             },
         }
-        save_checkpoint(model, out_dir / f"epoch_{epoch}.pt", **meta)
+        save_checkpoint(
+            model,
+            out_dir / f"epoch_{epoch}.pt",
+            optimizer=optimizer,
+            scaler=scaler if use_amp else None,
+            rng=get_rng_state(),
+            **meta,
+        )
+        if is_best:
+            save_checkpoint(
+                model,
+                out_dir / "best.pt",
+                optimizer=optimizer,
+                scaler=scaler if use_amp else None,
+                rng=get_rng_state(),
+                **meta,
+            )
 
-        if score > best_score:
-            best_score = score
-            best_epoch = epoch
-            stale = 0
-            save_checkpoint(model, out_dir / "best.pt", **meta)
-        else:
-            stale += 1
-            if stale >= args.patience:
-                print(f"Early stopping after {args.patience} epochs without improvement.")
-                break
+        if stale >= args.patience:
+            print(f"Early stopping after {args.patience} epochs without improvement.")
+            break
 
     print(f"Training finished. Best score={best_score:.4f} at epoch {best_epoch}.")
     print(f"Best checkpoint: {out_dir / 'best.pt'}")
