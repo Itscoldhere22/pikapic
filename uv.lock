@@ -831,8 +831,6 @@ dependencies = [
     { name = "streamlit" },
     { name = "torch", version = "2.11.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "torch", version = "2.11.0+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
-    { name = "torchaudio", version = "2.11.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "torchaudio", version = "2.11.0+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "torchvision", version = "0.26.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "torchvision", version = "0.26.0+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "tqdm" },
@@ -845,8 +843,6 @@ requires-dist = [
     { name = "streamlit", specifier = ">=1.62.0" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = "==2.11.0" },
     { name = "torch", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = "==2.11.0", index = "https://download.pytorch.org/whl/cu130" },
-    { name = "torchaudio", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = "==2.11.0" },
-    { name = "torchaudio", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = "==2.11.0", index = "https://download.pytorch.org/whl/cu130" },
     { name = "torchvision", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = "==0.26.0" },
     { name = "torchvision", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = "==0.26.0", index = "https://download.pytorch.org/whl/cu130" },
     { name = "tqdm", specifier = ">=4.70.0" },
@@ -965,30 +961,6 @@ wheels = [
     { url = "https://download-r2.pytorch.org/whl/cu130/torch-2.11.0%2Bcu130-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:6304535e9e4cd1beeab449e407712602aa473a97e7b310dc5650ef50940bd94f", upload-time = "2026-04-27T19:58:56Z" },
     { url = "https://download-r2.pytorch.org/whl/cu130/torch-2.11.0%2Bcu130-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:225b22e0a4e36ea573d3a68796e6816a160616f67e8b8c55683a88bf7777f4cd", upload-time = "2026-04-27T19:59:21Z" },
     { url = "https://download-r2.pytorch.org/whl/cu130/torch-2.11.0%2Bcu130-cp311-cp311-win_amd64.whl", hash = "sha256:a1ff66c0ad21bf48c3187e84a08a6895d48e9bae435e27811b0b65f36bef4555", upload-time = "2026-04-27T20:00:28Z" },
-]
-
-[[package]]
-name = "torchaudio"
-version = "2.11.0"
-source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "sys_platform != 'linux' and sys_platform != 'win32'",
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/94/77/0eec7f175d88f312296bd5b11c23bd58da37c1021f53da3db4df449ce3ee/torchaudio-2.11.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:492dd64645e9d0bb843e94f1d9a4d1e31426262ffc594fafecc1697df9df5eb9", size = 684142, upload-time = "2026-03-23T18:13:36.805Z" },
-]
-
-[[package]]
-name = "torchaudio"
-version = "2.11.0+cu130"
-source = { registry = "https://download.pytorch.org/whl/cu130" }
-resolution-markers = [
-    "sys_platform == 'linux' or sys_platform == 'win32'",
-]
-wheels = [
-    { url = "https://download-r2.pytorch.org/whl/cu130/torchaudio-2.11.0%2Bcu130-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:fa4de5984cc666557d4e5eea3c50735b1ccb39b2ae284efb14b721e642eef652", upload-time = "2026-03-23T15:50:26Z" },
-    { url = "https://download-r2.pytorch.org/whl/cu130/torchaudio-2.11.0%2Bcu130-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:f6e1e3ab31abfa81f5c8801a0eab769d5308514dc644bb39dcf0a9057f364f16", upload-time = "2026-03-23T15:50:26Z" },
-    { url = "https://download-r2.pytorch.org/whl/cu130/torchaudio-2.11.0%2Bcu130-cp311-cp311-win_amd64.whl", hash = "sha256:04aadf807c27df785c6e3463e70bb1a657ed2d1a16b5578114c9fdf7e8c1ac10", upload-time = "2026-03-23T15:50:26Z" },
 ]
 
 [[package]]

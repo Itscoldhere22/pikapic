@@ -144,8 +144,13 @@ What happens:
 
 Output files (in `checkpoints/` by default):
 
+- `head_epoch_1.pt`, `head.pt` — head-only stage snapshots (before fine-tuning)
+- `epoch_1.pt`, `epoch_2.pt`, … — every fine-tuning epoch's checkpoint
 - `best.pt` — the best checkpoint (use this for evaluation)
-- `epoch_1.pt`, `epoch_2.pt`, … — every epoch's checkpoint
+
+Stage-2 checkpoints (`epoch_*.pt`, `best.pt`) carry the **full resume state** — model
+weights, optimizer, AMP scaler, the epoch counter, and RNG state — so you can stop and
+continue training exactly where you left off.
 
 **First run tip** — verify everything works on a tiny subset before a real run:
 
@@ -156,6 +161,20 @@ uv run python src/train.py --manifest data/image_manifest.csv --sanity --no-pret
 `--sanity` limits to a handful of images, `--no-pretrained` skips the weight download,
 `--device cpu` avoids needing a GPU. It should finish in seconds. If it does, drop
 those flags for the real run.
+
+**Resuming a run** — training can be stopped (Ctrl-C / timeout) and continued later:
+
+```bash
+uv run python src/train.py --manifest data/image_manifest.csv \
+  --resume checkpoints/epoch_5.pt --epochs 8
+```
+
+`--resume` loads the model weights **and** the optimizer, AMP scaler, epoch counter,
+and RNG state, then continues fine-tuning from the next epoch (so the example above
+runs epochs 6–8) and skips the head-only stage. Set `--epochs` to the *total* number
+of fine-tuning epochs you want (8 above), or raise it to train longer than originally
+planned. If the checkpoint is an older, weights-only file, `--resume` degrades to a
+warm start — it loads the weights and begins a fresh optimizer at epoch 1.
 
 ---
 
@@ -230,7 +249,7 @@ uv run python src/evaluate.py \
 | `--eval-variants` | see below | Comma-separated variants used for the selection score. |
 | `--no-amp` | off | Disable mixed precision. |
 | `--no-pretrained` | off | Train from scratch (skips the weight download; for offline/testing). |
-| `--resume` | *(none)* | Path to a checkpoint to resume from (skips the head-only stage). |
+| `--resume` | *(none)* | Path to a checkpoint to resume from — restores weights, optimizer, scaler, epoch & RNG, then continues fine-tuning (skips the head-only stage). |
 | `--sanity` | off | Tiny run to smoke-test the pipeline. |
 
 ### `src/evaluate.py` — evaluate a checkpoint
@@ -378,15 +397,15 @@ A concrete 3-variant sweep (run one at a time):
 ```bash
 # 1. Conservative fine-tuning
 uv run python src/train.py --manifest data/image_manifest.csv --out-dir checkpoints/v1_conservative \
-  --head-lr 5e-4 --lr 5e-5 --weight-decay 1e-4 --aug-strength 1.0 --seed 42
+  --epochs 50 --head-lr 5e-4 --lr 5e-5 --weight-decay 1e-4 --aug-strength 1.0 --seed 42
 
 # 2. Stronger adaptation
 uv run python src/train.py --manifest data/image_manifest.csv --out-dir checkpoints/v2_stronger \
-  --head-lr 1e-3 --lr 2e-4 --weight-decay 1e-4 --aug-strength 1.0 --seed 42
+  --epochs 50 --head-lr 1e-3 --lr 2e-4 --weight-decay 1e-4 --aug-strength 1.0 --seed 42
 
 # 3. Regularized / imbalance-robust
 uv run python src/train.py --manifest data/image_manifest.csv --out-dir checkpoints/v3_regularized \
-  --head-lr 1e-3 --lr 1e-4 --weight-decay 5e-4 --aug-strength 1.5 --seed 42
+  --epochs 50 --head-lr 1e-3 --lr 1e-4 --weight-decay 5e-4 --aug-strength 1.5 --seed 42
 ```
 
 > On class weighting: the dataset is balanced (10k AI + 10k real), so
@@ -402,3 +421,9 @@ uv run python src/evaluate.py --manifest data/image_manifest.csv --checkpoint ch
 Each run's checkpoint stores its full config (now including `aug_strength` and
 `pos_weight`), and the final `Best score=` line prints the selection score. Keep
 both so you can rank the variants and feed the winners into the Phase 4 soup.
+
+## 14. Phase 3 - Model Soup
+### Trained without Midjourney and Wukong
+```powershell
+uv run python .\src\soup.py .\checkpoints\v0_default_50\best.pt .\checkpoints\v1_conservative_50\best.pt .\checkpoints\v2_stronger_50\v2_stronger_50.pt .\checkpoints\v3_regularized_50\v3_regularized.pt --manifest .\data\image_manifest.csv
+```

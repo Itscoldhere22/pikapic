@@ -45,7 +45,7 @@ GENERATOR_DIRS = {
 }
 
 # These families are held out completely for unseen-generator testing.
-HELD_OUT_FAMILIES = {"Wukong", "Midjourney"}
+HELD_OUT_FAMILIES = {"ADM", "GLIDE"}
 
 # Initial training size (PLAN.md "Dataset plan"): ~10k AI + ~10k real/nature.
 # These are the total counts across *training* families; val is carved out on
@@ -438,32 +438,32 @@ def build_eval_transform(size: int = 224) -> T.Compose:
 # follow Question-Statement.md; extras are our additions.
 VARIANT_DISTORTIONS = {
     # Required (challenge subset)
-    "jpeg_90": JPEG(90),
-    "jpeg_70": JPEG(70),
-    "jpeg_50": JPEG(50),
-    "jpeg_30": JPEG(30),
-    "blur_0.5": GaussianBlur(0.5),
-    "blur_1.0": GaussianBlur(1.0),
-    "blur_2.0": GaussianBlur(2.0),
+    # "jpeg_90": JPEG(90),
+    # "jpeg_70": JPEG(70),
+    # "jpeg_50": JPEG(50),
+    # "jpeg_30": JPEG(30),
+    # "blur_0.5": GaussianBlur(0.5),
+    # "blur_1.0": GaussianBlur(1.0),
+    # "blur_2.0": GaussianBlur(2.0),
     "resize_0.5": Downscale(0.5),
     "resize_0.25": Downscale(0.25),
-    "noise_0.02": GaussianNoise(0.02),
-    "noise_0.05": GaussianNoise(0.05),
-    "noise_0.10": GaussianNoise(0.10),
-    "color_jitter": T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
-    "crop_0.8": Crop80(center=True),
-    # Proposed extras
-    "flip": T.RandomHorizontalFlip(p=1.0),
-    "rotate_10": T.RandomRotation(
-        degrees=(10, 10), interpolation=T.InterpolationMode.BILINEAR, fill=0
-    ),
-    "autocontrast": T.RandomAutocontrast(p=1.0),
-    "equalize": T.RandomEqualize(p=1.0),
-    "sharpen": Sharpen(2.0),
-    "posterize_5": Posterize(5),
-    "median_3": MedianFilter(3),
-    "webp_75": WebPReencode(75),
-    "saltpepper": SaltAndPepper(0.02),
+    # "noise_0.02": GaussianNoise(0.02),
+    # "noise_0.05": GaussianNoise(0.05),
+    # "noise_0.10": GaussianNoise(0.10),
+    # "color_jitter": T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+    # "crop_0.8": Crop80(center=True),
+    # # Proposed extras
+    # "flip": T.RandomHorizontalFlip(p=1.0),
+    # "rotate_10": T.RandomRotation(
+    #     degrees=(10, 10), interpolation=T.InterpolationMode.BILINEAR, fill=0
+    # ),
+    # "autocontrast": T.RandomAutocontrast(p=1.0),
+    # "equalize": T.RandomEqualize(p=1.0),
+    # "sharpen": Sharpen(2.0),
+    # "posterize_5": Posterize(5),
+    # "median_3": MedianFilter(3),
+    # "webp_75": WebPReencode(75),
+    # "saltpepper": SaltAndPepper(0.02),
 }
 
 

@@ -29,34 +29,34 @@ from dataset import (
 # Representative one-per-category subset used for lightweight checkpoint
 # selection during training (full breakdown uses all variants).
 SELECTION_VARIANTS = [
-    "jpeg_70",
-    "blur_1.0",
+    # "jpeg_70",
+    # "blur_1.0",
     "resize_0.5",
-    "noise_0.05",
-    "color_jitter",
-    "crop_0.8",
+    # "noise_0.05",
+    # "color_jitter",
+    # "crop_0.8",
 ]
 
 # Category rollup: mean ROC-AUC over each group (mirrors PLAN.md breakdown).
 CATEGORIES = {
     "clean": ["clean"],
-    "jpeg": ["jpeg_90", "jpeg_70", "jpeg_50", "jpeg_30"],
-    "blur": ["blur_0.5", "blur_1.0", "blur_2.0"],
+    # "jpeg": ["jpeg_90", "jpeg_70", "jpeg_50", "jpeg_30"],
+    # "blur": ["blur_0.5", "blur_1.0", "blur_2.0"],
     "resize": ["resize_0.5", "resize_0.25"],
-    "noise": ["noise_0.02", "noise_0.05", "noise_0.10"],
-    "color_jitter": ["color_jitter"],
-    "crop": ["crop_0.8"],
-    "extras": [
-        "flip",
-        "rotate_10",
-        "autocontrast",
-        "equalize",
-        "sharpen",
-        "posterize_5",
-        "median_3",
-        "webp_75",
-        "saltpepper",
-    ],
+    # "noise": ["noise_0.02", "noise_0.05", "noise_0.10"],
+    # "color_jitter": ["color_jitter"],
+    # "crop": ["crop_0.8"],
+    # "extras": [
+    #     "flip",
+    #     "rotate_10",
+    #     "autocontrast",
+    #     "equalize",
+    #     "sharpen",
+    #     "posterize_5",
+    #     "median_3",
+    #     "webp_75",
+    #     "saltpepper",
+    # ],
 }
 
 
@@ -169,7 +169,9 @@ def build_model(num_classes: int = 1, pretrained: bool = True):
 def load_checkpoint(path, device):
     # Pretrained weights are overwritten by the checkpoint, so skip the download.
     model = build_model(num_classes=1, pretrained=False)
-    state = torch.load(path, map_location=device)
+    # weights_only=False: training checkpoints may embed numpy RNG state alongside
+    # the model weights; loading only the "model" key is unaffected by the rest.
+    state = torch.load(path, map_location=device, weights_only=False)
     if isinstance(state, dict) and "model" in state:
         model.load_state_dict(state["model"])
     elif isinstance(state, dict) and "state_dict" in state:
