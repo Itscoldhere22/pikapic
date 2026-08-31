@@ -45,7 +45,7 @@ GENERATOR_DIRS = {
 }
 
 # These families are held out completely for unseen-generator testing.
-HELD_OUT_FAMILIES = {"Wukong", "Midjourney"}
+HELD_OUT_FAMILIES = {"ADM", "GLIDE"}
 
 # Initial training size (PLAN.md "Dataset plan"): ~10k AI + ~10k real/nature.
 # These are the total counts across *training* families; val is carved out on

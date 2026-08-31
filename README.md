@@ -378,15 +378,15 @@ A concrete 3-variant sweep (run one at a time):
 ```bash
 # 1. Conservative fine-tuning
 uv run python src/train.py --manifest data/image_manifest.csv --out-dir checkpoints/v1_conservative \
-  --head-lr 5e-4 --lr 5e-5 --weight-decay 1e-4 --aug-strength 1.0 --seed 42
+  --epochs 50 --head-lr 5e-4 --lr 5e-5 --weight-decay 1e-4 --aug-strength 1.0 --seed 42
 
 # 2. Stronger adaptation
 uv run python src/train.py --manifest data/image_manifest.csv --out-dir checkpoints/v2_stronger \
-  --head-lr 1e-3 --lr 2e-4 --weight-decay 1e-4 --aug-strength 1.0 --seed 42
+  --epochs 50 --head-lr 1e-3 --lr 2e-4 --weight-decay 1e-4 --aug-strength 1.0 --seed 42
 
 # 3. Regularized / imbalance-robust
 uv run python src/train.py --manifest data/image_manifest.csv --out-dir checkpoints/v3_regularized \
-  --head-lr 1e-3 --lr 1e-4 --weight-decay 5e-4 --aug-strength 1.5 --seed 42
+  --epochs 50 --head-lr 1e-3 --lr 1e-4 --weight-decay 5e-4 --aug-strength 1.5 --seed 42
 ```
 
 > On class weighting: the dataset is balanced (10k AI + 10k real), so
@@ -402,3 +402,9 @@ uv run python src/evaluate.py --manifest data/image_manifest.csv --checkpoint ch
 Each run's checkpoint stores its full config (now including `aug_strength` and
 `pos_weight`), and the final `Best score=` line prints the selection score. Keep
 both so you can rank the variants and feed the winners into the Phase 4 soup.
+
+## 14. Phase 3 - Model Soup
+### Trained without Midjourney and Wukong
+```powershell
+uv run python .\src\soup.py .\checkpoints\v0_default_50\best.pt .\checkpoints\v1_conservative_50\best.pt .\checkpoints\v2_stronger_50\v2_stronger_50.pt .\checkpoints\v3_regularized_50\v3_regularized.pt --manifest .\data\image_manifest.csv
+```

@@ -168,7 +168,12 @@ def build_model(num_classes: int = 1, pretrained: bool = True):
 def load_checkpoint(path, device):
     # Pretrained weights are overwritten by the checkpoint, so skip the download.
     model = build_model(num_classes=1, pretrained=False)
-    state = torch.load(path, map_location=device)
+
+    # # Allow numpy
+    # torch.serialization.add_safe_globals([torch.serialization.Storage]) # Often required alongside numpy
+    # torch.serialization.add_safe_globals([np._core.multiarray._reconstruct])
+
+    state = torch.load(path, map_location=device, weights_only=False)
     if isinstance(state, dict) and "model" in state:
         model.load_state_dict(state["model"])
     elif isinstance(state, dict) and "state_dict" in state:
