@@ -15,6 +15,7 @@ import math
 import numpy as np
 import pandas as pd
 import torch
+import tqdm
 from torch.utils.data import DataLoader
 from torchvision.models import ResNet50_Weights, resnet50
 
@@ -191,7 +192,7 @@ def _predict(model, dataset, device, batch_size, num_workers):
         dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
     )
     labels_list, scores_list = [], []
-    for imgs, labels in loader:
+    for imgs, labels in tqdm.tqdm(loader):
         imgs = imgs.to(device)
         logits = model(imgs)
         scores = torch.sigmoid(logits).squeeze(1)
